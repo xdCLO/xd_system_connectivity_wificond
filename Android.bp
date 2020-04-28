@@ -30,11 +30,7 @@ cc_binary {
     name: "wificond",
     defaults: ["wificond_defaults"],
     init_rc: ["wificond.rc"],
-    srcs: [
-	"main.cpp",
-	"wifi_keystore_hal_connector.cpp"
-    ],
-    include_dirs: ["system/security/keystore/include"],
+    srcs: ["main.cpp"],
 
     shared_libs: [
         "android.hardware.wifi.offload@1.0",
@@ -43,18 +39,11 @@ cc_binary {
         "libcutils",
         "libhidlbase",
         "libhidltransport",
-        "libkeystore_aidl",
-        "libkeystore_binder",
-        "libkeystore_parcelables",
         "libminijail",
         "libutils",
         "libwifi-system-iface",
-        "android.system.wifi.keystore@1.0",
     ],
-    static_libs: [
-        "libwificond", // Wificond daemon
-        "libwifikeystorehal"  // Wifi Keystore HAL service
-    ],
+    static_libs: ["libwificond"],
 }
 
 //
@@ -146,7 +135,15 @@ cc_library_static {
     },
     srcs: [
         "ipc_constants.cpp",
-        ":libwificond_ipc_aidl",
+        "aidl/android/net/wifi/IApInterface.aidl",
+        "aidl/android/net/wifi/IApInterfaceEventCallback.aidl",
+        "aidl/android/net/wifi/IClientInterface.aidl",
+        "aidl/android/net/wifi/IInterfaceEventCallback.aidl",
+        "aidl/android/net/wifi/IPnoScanEvent.aidl",
+        "aidl/android/net/wifi/IScanEvent.aidl",
+        "aidl/android/net/wifi/ISendMgmtFrameEvent.aidl",
+        "aidl/android/net/wifi/IWificond.aidl",
+        "aidl/android/net/wifi/IWifiScannerImpl.aidl",
         "scanning/channel_settings.cpp",
         "scanning/hidden_network.cpp",
         "scanning/pno_network.cpp",
@@ -158,22 +155,6 @@ cc_library_static {
     shared_libs: ["libbinder"],
 }
 
-filegroup {
-    name: "libwificond_ipc_aidl",
-    srcs: [
-        "aidl/android/net/wifi/IApInterface.aidl",
-        "aidl/android/net/wifi/IApInterfaceEventCallback.aidl",
-        "aidl/android/net/wifi/IClientInterface.aidl",
-        "aidl/android/net/wifi/IInterfaceEventCallback.aidl",
-        "aidl/android/net/wifi/IPnoScanEvent.aidl",
-        "aidl/android/net/wifi/IScanEvent.aidl",
-        "aidl/android/net/wifi/ISendMgmtFrameEvent.aidl",
-        "aidl/android/net/wifi/IWificond.aidl",
-        "aidl/android/net/wifi/IWifiScannerImpl.aidl",
-    ],
-    path: "aidl",
-}
-
 //
 // test util library
 //
@@ -181,6 +162,7 @@ cc_library_static {
     name: "libwificond_test_utils",
     defaults: ["wificond_defaults"],
     srcs: [
+        "tests/integration/binder_dispatcher.cpp",
         "tests/integration/process_utils.cpp",
         "tests/shell_utils.cpp",
     ],
