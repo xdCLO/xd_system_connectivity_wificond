@@ -105,7 +105,7 @@ Status Server::createApInterface(const std::string& iface_name,
 
   unique_ptr<ApInterfaceImpl> ap_interface(new ApInterfaceImpl(
       interface.name,
-      interface.index,
+      interface.if_index,
       netlink_utils_,
       if_tool_.get()));
   *created_interface = ap_interface->GetBinder();
@@ -128,7 +128,7 @@ Status Server::tearDownApInterface(const std::string& iface_name,
 
   const auto iter_wi = iface_to_wiphy_index_map_.find(iface_name);
   if (iter_wi != iface_to_wiphy_index_map_.end()) {
-    LOG(DEBUG) << "tearDownApInterface: erasing wiphy_index for iface_name " << iface_name;
+    LOG(INFO) << "tearDownApInterface: erasing wiphy_index for iface_name " << iface_name;
     iface_to_wiphy_index_map_.erase(iter_wi);
   }
 
@@ -157,7 +157,7 @@ Status Server::createClientInterface(const std::string& iface_name,
   unique_ptr<ClientInterfaceImpl> client_interface(new ClientInterfaceImpl(
       wiphy_index,
       interface.name,
-      interface.index,
+      interface.if_index,
       interface.mac_address,
       if_tool_.get(),
       netlink_utils_,
@@ -167,6 +167,8 @@ Status Server::createClientInterface(const std::string& iface_name,
   client_interfaces_[iface_name] = std::move(client_interface);
   if (hasNoIfaceForWiphyIndex(wiphy_index)) {
     UpdateBandWiphyIndexMap(wiphy_index);
+  } else {
+    LOG(INFO) << "Band info for wiphy_index " << wiphy_index << " already available";
   }
   iface_to_wiphy_index_map_[iface_name] = wiphy_index;
 
@@ -186,10 +188,12 @@ Status Server::tearDownClientInterface(const std::string& iface_name,
   const auto iter_wi = iface_to_wiphy_index_map_.find(iface_name);
   if (iter_wi != iface_to_wiphy_index_map_.end()) {
     int wiphy_index = iter_wi->second;
-    LOG(DEBUG) << "tearDownClientInterface: erasing wiphy_index for iface_name " << iface_name;
+    LOG(INFO) << "tearDownClientInterface: erasing wiphy_index for iface_name " << iface_name;
     iface_to_wiphy_index_map_.erase(iter_wi);
     if (hasNoIfaceForWiphyIndex(wiphy_index)) {
       EraseBandWiphyIndexMap(wiphy_index);
+    } else {
+      LOG(INFO) << "Band info for wiphy_index " << wiphy_index << " retained";
     }
   }
 
@@ -244,10 +248,10 @@ status_t Server::dump(int fd, const Vector<String16>& /*args*/) {
 
   stringstream ss;
   ss << "Cached interfaces list from kernel message: " << endl;
-  for (const auto& iface : interfaces_) {
-    ss << "Interface index: " << iface.index
+  for (const auto& iface : debug_interfaces_) {
+    ss << "Interface index: " << iface.if_index
        << ", name: " << iface.name
-       << ", wiphy index: " << iface_to_wiphy_index_map_[iface.name]
+       << ", wiphy index: " << iface.wiphy_index
        << ", mac address: "
        << LoggingUtils::GetMacString(iface.mac_address) << endl;
   }
@@ -425,13 +429,13 @@ bool Server::SetupInterface(const std::string& iface_name,
            _1,
            _2));
 
-  interfaces_.clear();
-  if (!netlink_utils_->GetInterfaces(*wiphy_index, &interfaces_)) {
+  debug_interfaces_.clear();
+  if (!netlink_utils_->GetInterfaces(*wiphy_index, &debug_interfaces_)) {
     LOG(ERROR) << "Failed to get interfaces info from kernel for iface_name " << iface_name << " wiphy_index " << *wiphy_index;
     return false;
   }
 
-  for (const auto& iface : interfaces_) {
+  for (const auto& iface : debug_interfaces_) {
     if (iface.name == iface_name) {
       *interface = iface;
       return true;
@@ -558,6 +562,7 @@ int Server::GetWiphyIndexFromBand(int band) {
 }
 
 void Server::UpdateBandWiphyIndexMap(int wiphy_index) {
+  LOG(DEBUG) << "UpdateBandWiphyIndexMap for wiphy_index " << wiphy_index;
   BandInfo band_info;
   if (!GetBandInfo(wiphy_index, &band_info)) return;
 
@@ -594,6 +599,7 @@ void Server::UpdateBandWiphyIndexMap(int wiphy_index) {
 }
 
 void Server::EraseBandWiphyIndexMap(int wiphy_index) {
+  LOG(DEBUG) << "EraseBandWiphyIndexMap for wiphy_index " << wiphy_index;
   for (auto it = band_to_wiphy_index_map_.begin();
       // end() is computed every iteration since erase() could invalidate it
       it != band_to_wiphy_index_map_.end();
@@ -609,6 +615,5 @@ void Server::EraseBandWiphyIndexMap(int wiphy_index) {
     }
   }
 }
-
 }  // namespace wificond
 }  // namespace android
