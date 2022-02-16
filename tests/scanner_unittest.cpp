@@ -51,8 +51,6 @@ namespace {
 
 constexpr uint32_t kFakeInterfaceIndex = 12;
 constexpr uint32_t kFakeScanIntervalMs = 10000;
-vector<uint32_t> kDefaultFrequencies = {2412, 2417, 2422, 2427, 2432, 2437, 2447, 2452, 2457,
-                                        2462, 5180, 5200, 5220, 5240, 5745, 5765, 5785, 5805};
 
 // This is a helper function to mock the behavior of ScanUtils::Scan()
 // when we expect a error code.
@@ -511,9 +509,10 @@ TEST_F(ScannerTest, TestStartPnoScanWithFrequencyListFallbackMechanism) {
   pno_settings.pno_networks_.push_back(network);
   pno_settings.pno_networks_.push_back(network2);
 
-  std::set<uint32_t> frequencies(kDefaultFrequencies.begin(), kDefaultFrequencies.end());
-  frequencies.insert(5640); // add frequency from saved network
-  vector<uint32_t> expected_frequencies(frequencies.begin(), frequencies.end());
+  std::set<int32_t> default_frequencies = {2412, 2417, 2422, 2427, 2432, 2437, 2447, 2452, 2457,
+                                           2462, 5180, 5200, 5220, 5240, 5745, 5765, 5785, 5805};
+  default_frequencies.insert(5640); // add frequency from saved network
+  vector<uint32_t> expected_frequencies(default_frequencies.begin(), default_frequencies.end());
 
   // Mock BandInfo to make sure the default_frequencies don't get filtered out as invalid.
   BandInfo band_info;
@@ -530,8 +529,8 @@ TEST_F(ScannerTest, TestStartPnoScanWithFrequencyListFallbackMechanism) {
   EXPECT_TRUE(success);
 }
 
-// Verify that when there is no frequency data in pno networks, default frequencies is passed into
-// StartScheduledScan frequencies.
+// Verify that when there is no frequency data all pno networks, an empty list is passed into
+// StartScheduledScan in order to scan all frequencies.
 TEST_F(ScannerTest, TestStartPnoScanEmptyList) {
   bool success = false;
   ScanCapabilities scan_capabilities_test_frequencies(
@@ -554,7 +553,7 @@ TEST_F(ScannerTest, TestStartPnoScanEmptyList) {
   pno_settings.pno_networks_.push_back(network2);
   EXPECT_CALL(
       scan_utils_,
-      StartScheduledScan(_, _, _, _, _, _, _, _, Eq(kDefaultFrequencies), _)).
+      StartScheduledScan(_, _, _, _, _, _, _, _, Eq(vector<uint32_t>{}), _)).
           WillOnce(Return(true));
   EXPECT_TRUE(scanner_impl.startPnoScan(pno_settings, &success).isOk());
   EXPECT_TRUE(success);
