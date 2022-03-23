@@ -134,15 +134,6 @@ Status ScannerImpl::getPnoScanResults(
   return Status::ok();
 }
 
-Status ScannerImpl::getMaxSsidsPerScan(int32_t* out_max_ssids_per_scan) {
-  if (!CheckIsValid()) {
-    *out_max_ssids_per_scan = 0;
-    return Status::ok();
-  }
-  *out_max_ssids_per_scan = static_cast<int32_t>(scan_capabilities_.max_num_scan_ssids);
-  return Status::ok();
-}
-
 Status ScannerImpl::scan(const SingleScanSettings& scan_settings,
                          bool* out_success) {
   if (!CheckIsValid()) {
@@ -252,9 +243,10 @@ void ScannerImpl::ParsePnoSettings(const PnoSettings& pno_settings,
     }
   }
 
-  // Also scan the default frequencies if more than kPercentNetworksWithFreq of
+  // Also scan the default frequencies if there is frequency data passed down but more than 30% of
   // networks don't have frequency data.
-  if (num_networks_no_freqs * 100 > kPercentNetworksWithFreq * match_ssids->size()) {
+  if (unique_frequencies.size() > 0 && num_networks_no_freqs * 100 / match_ssids->size()
+      > kPercentNetworksWithFreq) {
     // Filter out frequencies not supported by chip.
     const auto band_2g = client_interface_->GetBandInfo().band_2g;
     for (const auto frequency : kPnoScanDefaultFreqs2G) {
