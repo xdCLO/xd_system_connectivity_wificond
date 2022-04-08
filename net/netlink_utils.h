@@ -35,18 +35,14 @@ namespace wificond {
 
 struct InterfaceInfo {
   InterfaceInfo() = default;
-  InterfaceInfo(uint32_t if_index,
-                uint32_t wiphy_index,
+  InterfaceInfo(uint32_t index,
                 const std::string& name,
                 const std::array<uint8_t, ETH_ALEN>& mac_address)
-      : if_index(if_index),
-        wiphy_index(wiphy_index),
+      : index(index),
         name(name),
         mac_address(mac_address) {}
   // Index of this interface.
-  uint32_t if_index;
-  // Wiphy Index of this interface.
-  uint32_t wiphy_index;
+  uint32_t index;
   // Name of this interface.
   std::string name;
   // MAC address of this interface.
@@ -70,8 +66,6 @@ struct BandInfo {
   std::vector<uint32_t> band_dfs;
   // Frequencies for 6 GHz band.
   std::vector<uint32_t> band_6g;
-  // Frequencies for 60 GHz band.
-  std::vector<uint32_t> band_60g;
   // support for 802.11n
   bool is_80211n_supported;
   // support for 802.11ac

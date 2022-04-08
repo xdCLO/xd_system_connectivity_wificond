@@ -62,7 +62,6 @@ bool ReturnErrorCodeForScanRequest(
     uint32_t interface_index_ignored,
     bool request_random_mac_ignored,
     int scan_type,
-    bool enable_6ghz_rnr,
     const std::vector<std::vector<uint8_t>>& ssids_ignored,
     const std::vector<uint32_t>& freqs_ignored,
     int* error_code) {
@@ -119,7 +118,7 @@ class ScannerTest : public ::testing::Test {
 
 TEST_F(ScannerTest, TestSingleScan) {
   EXPECT_CALL(scan_utils_,
-              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_DEFAULT, false, _, _, _)).
+              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_DEFAULT, _, _, _)).
       WillOnce(Return(true));
   bool success = false;
   scanner_impl_.reset(new ScannerImpl(kFakeInterfaceIndex,
@@ -132,7 +131,7 @@ TEST_F(ScannerTest, TestSingleScan) {
 
 TEST_F(ScannerTest, TestSingleScanForLowSpanScan) {
   EXPECT_CALL(scan_utils_,
-              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_LOW_SPAN, true, _, _, _)).
+              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_LOW_SPAN, _, _, _)).
       WillOnce(Return(true));
   wiphy_features_.supports_low_span_oneshot_scan = true;
   ScannerImpl scanner_impl(kFakeInterfaceIndex, scan_capabilities_,
@@ -140,7 +139,6 @@ TEST_F(ScannerTest, TestSingleScanForLowSpanScan) {
                            &scan_utils_);
   SingleScanSettings settings;
   settings.scan_type_ = IWifiScannerImpl::SCAN_TYPE_LOW_SPAN;
-  settings.enable_6ghz_rnr_ = true;
   bool success = false;
   EXPECT_TRUE(scanner_impl.scan(settings, &success).isOk());
   EXPECT_TRUE(success);
@@ -148,7 +146,7 @@ TEST_F(ScannerTest, TestSingleScanForLowSpanScan) {
 
 TEST_F(ScannerTest, TestSingleScanForLowPowerScan) {
   EXPECT_CALL(scan_utils_,
-              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_LOW_POWER, _, _, _, _)).
+              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_LOW_POWER, _, _, _)).
       WillOnce(Return(true));
   wiphy_features_.supports_low_power_oneshot_scan = true;
   ScannerImpl scanner_impl(kFakeInterfaceIndex, scan_capabilities_,
@@ -163,7 +161,7 @@ TEST_F(ScannerTest, TestSingleScanForLowPowerScan) {
 
 TEST_F(ScannerTest, TestSingleScanForHighAccuracyScan) {
   EXPECT_CALL(scan_utils_,
-              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_HIGH_ACCURACY, _, _, _, _)).
+              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_HIGH_ACCURACY, _, _, _)).
       WillOnce(Return(true));
   wiphy_features_.supports_high_accuracy_oneshot_scan = true;
   ScannerImpl scanner_impl(kFakeInterfaceIndex, scan_capabilities_,
@@ -178,7 +176,7 @@ TEST_F(ScannerTest, TestSingleScanForHighAccuracyScan) {
 
 TEST_F(ScannerTest, TestSingleScanForLowSpanScanWithNoWiphySupport) {
   EXPECT_CALL(scan_utils_,
-              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_DEFAULT, _, _, _, _)).
+              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_DEFAULT, _, _, _)).
       WillOnce(Return(true));
   ScannerImpl scanner_impl(kFakeInterfaceIndex, scan_capabilities_,
                            wiphy_features_, &client_interface_impl_,
@@ -192,7 +190,7 @@ TEST_F(ScannerTest, TestSingleScanForLowSpanScanWithNoWiphySupport) {
 
 TEST_F(ScannerTest, TestSingleScanForLowPowerScanWithNoWiphySupport) {
   EXPECT_CALL(scan_utils_,
-              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_DEFAULT, _, _, _, _)).
+              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_DEFAULT, _, _, _)).
       WillOnce(Return(true));
   ScannerImpl scanner_impl(kFakeInterfaceIndex, scan_capabilities_,
                            wiphy_features_, &client_interface_impl_,
@@ -206,7 +204,7 @@ TEST_F(ScannerTest, TestSingleScanForLowPowerScanWithNoWiphySupport) {
 
 TEST_F(ScannerTest, TestSingleScanForHighAccuracyScanWithNoWiphySupport) {
   EXPECT_CALL(scan_utils_,
-              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_DEFAULT, _, _, _, _)).
+              Scan(_, _, IWifiScannerImpl::SCAN_TYPE_DEFAULT, _, _, _)).
       WillOnce(Return(true));
   ScannerImpl scanner_impl(kFakeInterfaceIndex, scan_capabilities_,
                            wiphy_features_, &client_interface_impl_,
@@ -225,10 +223,10 @@ TEST_F(ScannerTest, TestSingleScanFailure) {
                                       &scan_utils_));
   EXPECT_CALL(
       scan_utils_,
-      Scan(_, _, _, _, _, _, _)).
+      Scan(_, _, _, _, _, _)).
           WillOnce(Invoke(bind(
               ReturnErrorCodeForScanRequest, EBUSY,
-              _1, _2, _3, _4, _5, _6, _7)));
+              _1, _2, _3, _4, _5, _6)));
 
   bool success = false;
   EXPECT_TRUE(scanner_impl_->scan(SingleScanSettings(), &success).isOk());
@@ -242,10 +240,10 @@ TEST_F(ScannerTest, TestProcessAbortsOnScanReturningNoDeviceErrorSeveralTimes) {
                                       &scan_utils_));
   ON_CALL(
       scan_utils_,
-      Scan(_, _, _, _, _, _, _)).
+      Scan(_, _, _, _, _, _)).
           WillByDefault(Invoke(bind(
               ReturnErrorCodeForScanRequest, ENODEV,
-              _1, _2, _3, _4, _5, _6, _7)));
+              _1, _2, _3, _4, _5, _6)));
 
   bool single_scan_failure;
   EXPECT_TRUE(scanner_impl_->scan(SingleScanSettings(), &single_scan_failure).isOk());
@@ -264,7 +262,8 @@ TEST_F(ScannerTest, TestAbortScan) {
                                       scan_capabilities_, wiphy_features_,
                                       &client_interface_impl_,
                                       &scan_utils_));
-  EXPECT_CALL(scan_utils_, Scan(_, _, _, _, _, _, _)).WillOnce(Return(true));
+  EXPECT_CALL(scan_utils_, Scan(_, _, _, _, _, _))
+      .WillOnce(Return(true));
   EXPECT_TRUE(
       scanner_impl_->scan(SingleScanSettings(), &single_scan_success).isOk());
   EXPECT_TRUE(single_scan_success);
@@ -510,17 +509,9 @@ TEST_F(ScannerTest, TestStartPnoScanWithFrequencyListFallbackMechanism) {
   pno_settings.pno_networks_.push_back(network2);
 
   std::set<int32_t> default_frequencies = {2412, 2417, 2422, 2427, 2432, 2437, 2447, 2452, 2457,
-                                           2462, 5180, 5200, 5220, 5240, 5745, 5765, 5785, 5805};
+      2462, 5180, 5200, 5220, 5240, 5745, 5765, 5785, 5805};
   default_frequencies.insert(5640); // add frequency from saved network
   vector<uint32_t> expected_frequencies(default_frequencies.begin(), default_frequencies.end());
-
-  // Mock BandInfo to make sure the default_frequencies don't get filtered out as invalid.
-  BandInfo band_info;
-  int default_2g[] = {2412, 2417, 2422, 2427, 2432, 2437, 2447, 2452, 2457, 2462};
-  int default_5g[] = {5180, 5200, 5220, 5240, 5745, 5765, 5785, 5805};
-  copy(std::begin(default_2g), std::end(default_2g), std::begin(band_info.band_2g));
-  copy(std::begin(default_5g), std::end(default_5g), std::begin(band_info.band_5g));
-  EXPECT_CALL(client_interface_impl_, GetBandInfo()).WillOnce(Return(band_info));
   EXPECT_CALL(
       scan_utils_,
       StartScheduledScan(_, _, _, _, _, _, _, _, Eq(expected_frequencies), _)).

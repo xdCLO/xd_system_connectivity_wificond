@@ -35,8 +35,6 @@ class MockClientInterfaceImpl : public ClientInterfaceImpl {
 
   MOCK_CONST_METHOD0(IsAssociated, bool());
 
-  MOCK_CONST_METHOD0(GetBandInfo, BandInfo());
-
 };  // class MockClientInterfaceImpl
 
 }  // namespace wificond
