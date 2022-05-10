@@ -71,6 +71,9 @@ constexpr uint8_t kHeCapPhyNumByte = 9; // Should be 11
 constexpr uint8_t kHe160MhzBitMask = 0x8;
 constexpr uint8_t kHe80p80MhzBitMask = 0x10;
 
+constexpr uint8_t kEhtCapPhyNumByte = 8;
+constexpr uint8_t kEht320MhzBitMask = 0x2;
+
 bool IsExtFeatureFlagSet(
     const std::vector<uint8_t>& ext_feature_flags_bytes,
     enum nl80211_ext_feature_index ext_feature_flag) {
@@ -470,6 +473,7 @@ void NetlinkUtils::ParseIfTypeDataAttributes(
     LOG(ERROR) << "Failed to get the list of attributes under iftype_data_attr";
     return;
   }
+
   NL80211NestedAttr attr = attrs[0];
   if (attr.HasAttribute(NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY)) {
     out_band_info->is_80211ax_supported = true;
@@ -477,6 +481,10 @@ void NetlinkUtils::ParseIfTypeDataAttributes(
   }
   if (attr.HasAttribute(NL80211_BAND_IFTYPE_ATTR_HE_CAP_MCS_SET)) {
     ParseHeMcsSetAttribute(attr, out_band_info);
+  }
+  if (attr.HasAttribute(NL80211_BAND_IFTYPE_ATTR_EHT_CAP_PHY)) {
+    out_band_info->is_80211be_supported = true;
+    ParseEhtCapPhyAttribute(attr, out_band_info);
   }
   return;
 }
@@ -653,7 +661,6 @@ void NetlinkUtils::ParseVhtCapAttribute(const NL80211NestedAttr& band,
   if (vht_cap & kVht80p80MhzBitMask) {
     out_band_info->is_80p80_mhz_supported = true;
   }
-
 }
 
 void NetlinkUtils::ParseHeCapPhyAttribute(const NL80211NestedAttr& attribute,
@@ -676,6 +683,25 @@ void NetlinkUtils::ParseHeCapPhyAttribute(const NL80211NestedAttr& attribute,
   }
   if (he_cap_phy[0] & kHe80p80MhzBitMask) {
     out_band_info->is_80p80_mhz_supported = true;
+  }
+}
+
+void NetlinkUtils::ParseEhtCapPhyAttribute(const NL80211NestedAttr& attribute,
+                                           BandInfo* out_band_info) {
+  vector<uint8_t> eht_cap_phy;
+  if (!attribute.GetAttributeValue(
+      NL80211_BAND_IFTYPE_ATTR_EHT_CAP_PHY,
+      &eht_cap_phy)) {
+    LOG(ERROR) << " EHT CAP PHY is not found";
+    return;
+  }
+
+  if (eht_cap_phy.size() < kEhtCapPhyNumByte) {
+    LOG(ERROR) << "EHT Cap PHY size is incorrect";
+    return;
+  }
+  if (eht_cap_phy[0] & kEht320MhzBitMask) {
+    out_band_info->is_320_mhz_supported = true;
   }
 }
 
