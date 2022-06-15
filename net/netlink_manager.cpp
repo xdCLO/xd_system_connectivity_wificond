@@ -33,7 +33,6 @@
 #include "net/nl80211_packet.h"
 
 using android::base::unique_fd;
-using android::nlinterceptor::InterceptedSocket;
 using std::array;
 using std::placeholders::_1;
 using std::string;
@@ -48,7 +47,7 @@ namespace {
 // netlink.h suggests NLMSG_GOODSIZE to be at most 8192 bytes.
 constexpr int kReceiveBufferSize = 8 * 1024;
 constexpr uint32_t kBroadcastSequenceNumber = 0;
-constexpr int kMaximumNetlinkMessageWaitMilliSeconds = 1000;
+constexpr int kMaximumNetlinkMessageWaitMilliSeconds = 300;
 uint8_t ReceiveBuffer[kReceiveBufferSize];
 
 void AppendPacket(vector<unique_ptr<const NL80211Packet>>* vec,
@@ -71,8 +70,6 @@ ChannelBandwidth getBandwidthType(uint32_t bandwidth) {
       return BW_80P80;
     case NL80211_CHAN_WIDTH_160:
       return BW_160;
-    case NL80211_CHAN_WIDTH_320:
-      return BW_320;
   }
   LOG(ERROR) << "Unknown bandwidth type: " << bandwidth;
   return BW_INVALID;
@@ -99,8 +96,7 @@ uint32_t NetlinkManager::GetSequenceNumber() {
 void NetlinkManager::ReceivePacketAndRunHandler(int fd) {
   ssize_t len = read(fd, ReceiveBuffer, kReceiveBufferSize);
   if (len == -1) {
-    LOG(ERROR) << "Failed to read packet from buffer on fd: " << fd;
-    perror(" netlink error ");
+    LOG(ERROR) << "Failed to read packet from buffer";
     return;
   }
   if (len == 0) {
@@ -223,14 +219,13 @@ bool NetlinkManager::Start() {
     LOG(DEBUG) << "NetlinkManager is already started";
     return true;
   }
-
-  bool setup_rt = SetupSocket(&sync_netlink_fd_, &sync_netlink_destination_);
+  bool setup_rt = SetupSocket(&sync_netlink_fd_);
   if (!setup_rt) {
     LOG(ERROR) << "Failed to setup synchronous netlink socket";
     return false;
   }
 
-  setup_rt = SetupSocket(&async_netlink_fd_, &async_netlink_destination_);
+  setup_rt = SetupSocket(&async_netlink_fd_);
   if (!setup_rt) {
     LOG(ERROR) << "Failed to setup asynchronous netlink socket";
     return false;
@@ -272,7 +267,7 @@ bool NetlinkManager::RegisterHandlerAndSendMessage(
     LOG(ERROR) << "Do not use asynchronous interface for dump request !";
     return false;
   }
-  if (!SendMessageInternal(packet, async_netlink_fd_.get(), async_netlink_destination_)) {
+  if (!SendMessageInternal(packet, async_netlink_fd_.get())) {
     return false;
   }
   message_handlers_[packet.GetMessageSequence()] = handler;
@@ -282,7 +277,7 @@ bool NetlinkManager::RegisterHandlerAndSendMessage(
 bool NetlinkManager::SendMessageAndGetResponses(
     const NL80211Packet& packet,
     vector<unique_ptr<const NL80211Packet>>* response) {
-  if (!SendMessageInternal(packet, sync_netlink_fd_.get(), sync_netlink_destination_)) {
+  if (!SendMessageInternal(packet, sync_netlink_fd_.get())) {
     return false;
   }
   // Polling netlink socket, waiting for GetFamily reply.
@@ -308,7 +303,7 @@ bool NetlinkManager::SendMessageAndGetResponses(
                            time_remaining);
 
     if (poll_return == 0) {
-      LOG(ERROR) << "Failed to poll netlink fd:" << sync_netlink_fd_.get() << "time out ";
+      LOG(ERROR) << "Failed to poll netlink fd: time out ";
       message_handlers_.erase(sequence);
       return false;
     } else if (poll_return == -1) {
@@ -391,23 +386,18 @@ bool NetlinkManager::SendMessageAndGetAck(const NL80211Packet& packet) {
   return true;
 }
 
-bool NetlinkManager::SendMessageInternal(const NL80211Packet& packet, int fd,
-    InterceptedSocket nl_destination) {
+bool NetlinkManager::SendMessageInternal(const NL80211Packet& packet, int fd) {
   const vector<uint8_t>& data = packet.GetConstData();
-  struct sockaddr_nl sa = nl_destination;
-
-  ssize_t bytes_sent = TEMP_FAILURE_RETRY(
-      sendto(fd, data.data(), data.size(), 0, reinterpret_cast<struct sockaddr*>(&sa), sizeof(sa))
-      );
+  ssize_t bytes_sent =
+      TEMP_FAILURE_RETRY(send(fd, data.data(), data.size(), 0));
   if (bytes_sent == -1) {
     PLOG(ERROR) << "Failed to send netlink message";
-    CHECK(!nlinterceptor::isEnabled()) << "Interceptor died, restarting wificond...";
     return false;
   }
   return true;
 }
 
-bool NetlinkManager::SetupSocket(unique_fd* netlink_fd, InterceptedSocket* nl_destination) {
+bool NetlinkManager::SetupSocket(unique_fd* netlink_fd) {
   struct sockaddr_nl nladdr;
 
   memset(&nladdr, 0, sizeof(nladdr));
@@ -435,15 +425,6 @@ bool NetlinkManager::SetupSocket(unique_fd* netlink_fd, InterceptedSocket* nl_de
     PLOG(ERROR) << "Failed to bind netlink socket";
     return false;
   }
-
-  if (!nlinterceptor::isEnabled()) {
-    nl_destination = {};  // sets portId to 0, talk directly to kernel.
-    return true;
-  }
-
-  auto interceptorSocketMaybe = nlinterceptor::createSocket(*netlink_fd, "Wificond");
-  CHECK(interceptorSocketMaybe.has_value()) << "Failed to create interceptor socket!";
-  *nl_destination = *interceptorSocketMaybe;
   return true;
 }
 
@@ -491,16 +472,6 @@ bool NetlinkManager::SubscribeToEvents(const string& group) {
     return false;
   }
   uint32_t group_id = groups[group];
-
-  if (nlinterceptor::isEnabled()) {
-    if (!nlinterceptor::subscribe(async_netlink_destination_, group_id)) {
-      LOG(ERROR) << "Failed to subscribe " << async_netlink_destination_.portId
-                 << " to group " << group_id << "!";
-      return false;
-    }
-    return true;
-  }
-
   int err = setsockopt(async_netlink_fd_.get(),
                        SOL_NETLINK,
                        NETLINK_ADD_MEMBERSHIP,
